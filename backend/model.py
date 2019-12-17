@@ -6,19 +6,23 @@ from urllib.parse import urlencode
 from ticket_values import *
 from pymongo import MongoClient
 
-client = MongoClient()
-db = client['test']
-users = db['users']
-interactions = db['interactions']
+with open('config.json', 'r') as file:
+  config = json.load(file)
 
-url  = 'https://domain.zendesk.com/api/v2/'
-credentials = 'email', 'password'
+client = MongoClient()
+db = client[config['DB_NAME']]
+users = db[config['DB_COLLECTION_USER']]
+interactions = db[config['DB_COLLECTION_TICKET']]
+
+url  = 'https://{domain}.zendesk.com/api/v2/{resource}{params}'
+credentials = config['API_EMAIL'], config['API_PASSWORD']
 session = requests.Session()
 session.auth = credentials
 
 def latest_user_update():
   try:
-    last_update = users.find().sort('updated_at', pymongo.DESCENDING).limit(1)[0]
+    last_update = users.find().sort('updated_at', pymongo.DESCENDING)\
+      .limit(1)[0]
   except IndexError as e:
     return None
   
@@ -35,7 +39,8 @@ def import_users():
   else:
     params['query'] = 'type:user'
 
-  sesion_url = url + 'search.json?' + urlencode(params)
+  sesion_url = url.format(domain=config['API_DOMAIN'],
+    resource='search.json', params='?' + urlencode(params))
   data = []
   while sesion_url:
     response = session.get(sesion_url)
@@ -55,7 +60,8 @@ def import_users():
       'created_at': user['created_at'],
       'updated_at': user['updated_at']
     }
-    users.replace_one({'integration_id': document['integration_id']}, document, True)
+    users.replace_one({'integration_id': document['integration_id']},
+      document, True)
   
   return len(data)
 
@@ -77,7 +83,8 @@ def latest_interaction_update():
     Return date
   """
   try:
-    last_update = interactions.find().sort('updated_at', pymongo.DESCENDING).limit(1)[0]
+    last_update = interactions.find().sort('updated_at', pymongo.DESCENDING)\
+      .limit(1)[0]
   except IndexError as e:
     return None
   
@@ -103,7 +110,8 @@ def import_interactions():
   else:
     params['query'] = 'type:ticket'
   
-  sesion_url = url + 'search.json?' + urlencode(params)
+  sesion_url = url.format(domain=config['API_DOMAIN'],
+    resource='search.json', params='?' + urlencode(params))
   data = []
   # Pagination
   while sesion_url:
@@ -159,7 +167,9 @@ def create_tickets(quantity):
   result = []
   
   for ticket in tickets:
-    response = session.post(url + 'tickets.json', headers=headers, data=json.dumps({"ticket": ticket}))
+    response = session.post(url.format(domain=config['API_DOMAIN'],
+      resource='tickets.json', params=''), headers=headers,
+      data=json.dumps({"ticket": ticket}))
     if response:
       response = response.json()
       item = response.get('ticket')

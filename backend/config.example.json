@@ -1,0 +1,8 @@
+{
+  "DB_NAME": "db_name",
+  "DB_COLLECTION_USER": "collection_name",
+  "DB_COLLECTION_TICKET": "collection_name",
+  "API_EMAIL": "email",
+  "API_PASSWORD": "password",
+  "API_DOMAIN": "domain"
+}
