@@ -13,6 +13,7 @@ client = MongoClient()
 db = client[config['DB_NAME']]
 users = db[config['DB_COLLECTION_USER']]
 interactions = db[config['DB_COLLECTION_TICKET']]
+querys = db[config['DB_COLLECTION_QUERY']]
 
 url  = 'https://{domain}.zendesk.com/api/v2/{resource}{params}'
 credentials = config['API_EMAIL'], config['API_PASSWORD']
@@ -20,24 +21,24 @@ session = requests.Session()
 session.auth = credentials
 
 def latest_user_update():
-  try:
-    last_update = users.find().sort('updated_at', pymongo.DESCENDING)\
-      .limit(1)[0]
-  except IndexError as e:
+  result = querys.find_one()
+  if result:
+    return result['updated_at']
+  else:
     return None
-  
-  return last_update['updated_at']
 
 def import_users():
   last_update = latest_user_update()
   params = {
-    'per_page': '2'
+    'per_page': '2',
+    'sort_by': 'updated_at',
+    'sort_order': 'desc'
   }
 
   if last_update:
-    params['query'] = 'type:user updated>' + last_update
+    params['query'] = 'type:user updated>' + last_update + ' role:agent role:admin'
   else:
-    params['query'] = 'type:user'
+    params['query'] = 'type:user role:agent role:admin'
 
   sesion_url = url.format(domain=config['API_DOMAIN'],
     resource='search.json', params='?' + urlencode(params))
@@ -49,6 +50,13 @@ def import_users():
       data += response['results']
     sesion_url = response['next_page']
   
+  if data:
+    querys.replace_one({'_id': 1},
+      {
+        'type': 'user',
+        'updated_at': data[0]['updated_at']
+      }, True)
+
   for user in data:
     first_name = user['name'].split(' ')[0]
     last_name = user['name'][len(first_name) + 1:]
@@ -101,7 +109,9 @@ def import_interactions():
   
   # URL params
   params = {
-    'per_page': '2'
+    'per_page': '2',
+    'sort_by': 'updated_at',
+    'sort_order': 'desc'
   }
 
   # Query
@@ -162,7 +172,7 @@ def create_tickets(quantity):
       },
       'assignee_id': random.choice(user_ids)
     })
-  
+
   headers = {'Content-Type': 'application/json'}
   result = []
   

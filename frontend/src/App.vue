@@ -237,8 +237,8 @@ export default {
         })
     },
     createInteractios () {
-      this.$http.post('http://localhost:8000/tickets',
-      { number_tickets: this.numberInteractios })
+      this.$http.post('http://localhost:8000/tickets', { number_tickets:
+      this.numberInteractios })
         .then(response => {
           console.log(response.body)
           this.numberInteractios = ''
